@@ -1,0 +1,26 @@
+@EndUserText.label : 'Excel - Data'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table zmaks_excel_data {
+
+  @AbapCatalog.foreignKey.screenCheck : false
+  key end_user    : syuname not null
+    with foreign key zmaks_excel_user
+      where end_user = zmaks_excel_data.end_user;
+  @AbapCatalog.foreignKey.screenCheck : false
+  key file_id     : sysuuid_x16 not null
+    with foreign key zmaks_excel_user
+      where end_user = zmaks_excel_data.end_user
+        and file_id = zmaks_excel_data.file_id;
+  key line_id     : sysuuid_x16 not null;
+  key line_no     : abap.numc(10) not null;
+  po_number       : ebeln;
+  po_item         : ebelp;
+  gr_quantity     : abap.dec(13,3);
+  unit_of_measure : abap.char(3);
+  site_id         : abap.char(16);
+  header_text     : abap.char(40);
+
+}

@@ -1,0 +1,1 @@
+Create a Data Element ZMAKS_DE_ATTACH with Predefined Type as "RAWSTRING" with Length 0

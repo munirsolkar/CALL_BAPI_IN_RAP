@@ -1,0 +1,20 @@
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Projection - XL Data'
+@Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
+define view entity ZMAKS_C_XL_DATA
+  as projection on ZMAKS_I_XL_DATA
+{
+  key EndUser,
+  key FileId,
+  key LineId,
+  key LineNumber,
+      PoNumber,
+      PoItem,
+      GrQuantity,
+      UnitOfMeasure,
+      SiteId,
+      HeaderText,
+      /* Associations */
+      _XLUser: redirected to parent ZMAKS_C_XL_USER
+}
