@@ -1,1 +1,0 @@
-Create a Table type with Structure ZMAKS_ST_MAT_DOC
