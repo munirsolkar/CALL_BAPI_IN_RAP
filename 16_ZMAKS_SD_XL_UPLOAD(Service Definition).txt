@@ -1,5 +1,0 @@
-@EndUserText.label: 'SD - Excel Upload'
-define service ZMAKS_SD_XL_UPLOAD {
-  expose ZMAKS_C_XL_USER as XLHead;
-  expose ZMAKS_C_XL_DATA as XLData;
-}
