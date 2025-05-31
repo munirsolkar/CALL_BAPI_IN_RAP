@@ -1,2 +1,0 @@
-Create a Service Binding on Service Definition "ZMAKS_SD_XL_UPLOAD".
-Binding Type should be OData V4 - UI
