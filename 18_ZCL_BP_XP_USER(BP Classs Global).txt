@@ -1,0 +1,16 @@
+CLASS zmaks_cl_bp_xl_user DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zmaks_i_excel_user.
+  TYPES: BEGIN OF gty_excel_data,
+           po_number  	 	TYPE string,
+           po_item 	 	TYPE string,
+           gr_quantity   	TYPE string,
+           unit_of_measure      TYPE string,
+           site_d         	TYPE string,
+           header_text         	TYPE string,
+           line_number TYPE string, "Internal Use during Upload
+           line_id     TYPE string, "Internal Use during Upload
+         END OF gty_excel_data.
+
+ENDCLASS.
+
+CLASS zmaks_cl_bp_xl_user IMPLEMENTATION.
+ENDCLASS.

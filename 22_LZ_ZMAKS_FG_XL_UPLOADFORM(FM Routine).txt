@@ -1,0 +1,350 @@
+*&---------------------------------------------------------------------*
+*& Form validate_data
+*&---------------------------------------------------------------------*
+FORM validate_data.
+
+  TYPES: BEGIN OF lty_keys_ekpo,
+           ebeln TYPE ebeln,
+           ebelp TYPE ebelp,
+         END OF lty_keys_ekpo.
+  TYPES: BEGIN OF lty_coas_keys,
+           aufnr TYPE coas-aufnr,
+           bukrs TYPE coas-bukrs,
+         END OF lty_coas_keys.
+  TYPES: BEGIN OF lty_prps_posid,
+           pspnr TYPE prps-pspnr,
+           posid TYPE prps-posid,
+         END OF lty_prps_posid.
+
+  DATA: gt_keys_ekpo TYPE STANDARD TABLE OF lty_keys_ekpo,
+        lt_posid     TYPE STANDARD TABLE OF lty_prps_posid,
+        ls_posid     TYPE lty_prps_posid,
+        lt_gr_done   TYPE STANDARD TABLE OF lty_ekbe,
+        lt_coas_keys TYPE STANDARD TABLE OF lty_coas_keys.
+
+  DATA: lv_gr_qty   TYPE menge_d,
+        lv_open_qty TYPE wesbs.
+
+  gt_keys_ekpo = VALUE #( FOR lwa_gr_data IN gt_xldata
+      ( ebeln = lwa_gr_data-po_number
+        ebelp = lwa_gr_data-po_item ) ).
+  CHECK gt_keys_ekpo IS NOT INITIAL.
+
+  SELECT DISTINCT ebeln, bsart FROM ekko
+         FOR ALL ENTRIES IN @gt_keys_ekpo
+      WHERE ebeln = @gt_keys_ekpo-ebeln
+      INTO TABLE @gt_ekko.
+  SELECT ebeln, ebelp, matnr, werks, lgort, menge, meins, bukrs
+        FROM ekpo
+        FOR ALL ENTRIES IN @gt_keys_ekpo
+        WHERE ebeln = @gt_keys_ekpo-ebeln
+          AND loekz IS INITIAL
+        INTO TABLE @gt_ekpo.
+  SELECT ebeln, ebelp, vgabe, gjahr, belnr, buzei,
+        bwart, menge, wesbs, shkzg
+        FROM ekbe FOR ALL ENTRIES IN @gt_keys_ekpo
+        WHERE ebeln = @gt_keys_ekpo-ebeln
+        AND bewtp = 'E'
+      INTO TABLE @gt_ekbe.
+  IF gt_ekbe IS NOT INITIAL.
+    "Get Existing WBS Element Data
+    SELECT mblnr, mjahr, zeile, ebeln, ebelp, ablad
+    FROM mseg FOR ALL ENTRIES IN @gt_ekbe
+      WHERE mblnr = @gt_ekbe-belnr
+        AND mjahr = @gt_ekbe-gjahr
+        AND zeile = @gt_ekbe-buzei
+    INTO TABLE @gt_mseg.
+  ENDIF.
+  IF gt_mseg IS NOT INITIAL.
+    "Convert to get PSPNR for WBS
+    LOOP AT gt_mseg ASSIGNING FIELD-SYMBOL(<lfs_mseg>).
+      ls_posid-posid = CONV ps_posid( <lfs_mseg>-ablad ).
+      CALL FUNCTION 'CONVERSION_EXIT_ABPSP_INPUT'
+        EXPORTING
+          input     = ls_posid-posid
+        IMPORTING
+          output    = ls_posid-pspnr
+        EXCEPTIONS
+          not_found = 1
+          OTHERS    = 2.
+      APPEND ls_posid TO lt_posid.
+      <lfs_mseg>-pspnr = ls_posid-pspnr.
+    ENDLOOP.
+    DELETE lt_posid WHERE posid IS INITIAL.
+    SORT lt_posid.
+    DELETE ADJACENT DUPLICATES FROM lt_posid COMPARING ALL FIELDS.
+
+    IF lt_posid IS NOT INITIAL.
+      SELECT pspnr, posid, objnr
+        FROM prps FOR ALL ENTRIES IN @lt_posid
+        WHERE pspnr = @lt_posid-pspnr
+        INTO TABLE @gt_prps.
+      IF gt_prps IS NOT INITIAL.
+        SELECT objnr, stat FROM jcds
+          FOR ALL ENTRIES IN @gt_prps
+          WHERE objnr = @gt_prps-objnr
+            AND inact IS INITIAL
+          INTO TABLE @gt_jcds.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  SELECT ebeln, ebelp, ps_psp_pnr
+    FROM ekkn FOR ALL ENTRIES IN @gt_keys_ekpo
+    WHERE ebeln = @gt_keys_ekpo-ebeln
+    INTO TABLE @gt_ekkn.
+  LOOP AT gt_ekkn ASSIGNING FIELD-SYMBOL(<lfs_ekkn>).
+    CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+      EXPORTING
+        input  = <lfs_ekkn>-ps_psp_pnr
+      IMPORTING
+        output = <lfs_ekkn>-ablad.
+  ENDLOOP.
+
+  lt_coas_keys = VALUE #(
+    FOR lwa_gr_data IN gt_xldata
+        WHERE ( site_id IS NOT INITIAL )
+        ( aufnr = lwa_gr_data-site_id ) ).
+  IF lt_coas_keys IS NOT INITIAL.
+    SELECT aufnr, bukrs FROM coas
+    FOR ALL ENTRIES IN @lt_coas_keys
+    WHERE aufnr = @lt_coas_keys-aufnr
+    INTO TABLE @DATA(lt_coas).
+  ENDIF.
+
+  LOOP AT gt_xldata INTO DATA(ls_xl_data).
+    DATA(lv_line) = sy-tabix.
+    DATA(ls_ekpo) = VALUE #( gt_ekpo[
+        ebeln = ls_xl_data-po_number
+        ebelp = ls_xl_data-po_item ] OPTIONAL ).
+    IF ls_ekpo IS INITIAL.
+      gt_return = VALUE #( BASE gt_return
+        ( type    = if_xo_const_message=>error
+          message = |Line { lv_line }: | &&
+                    |{ ls_xl_data-po_number }/ { ls_xl_data-po_item } does not exists| ) ).
+    ENDIF.
+    CHECK ls_ekpo IS NOT INITIAL.
+
+    IF ls_xl_data-site_id IS INITIAL.
+      gt_return = VALUE #( BASE gt_return
+        ( type    = if_xo_const_message=>error
+          message = |Site is mandatory | ) ).
+    ELSE.
+      DATA(ls_coas) = VALUE #( lt_coas[
+                    aufnr = ls_xl_data-site_id
+                    bukrs = ls_ekpo-bukrs ] OPTIONAL ).
+      IF ls_coas IS INITIAL.
+        gt_return = VALUE #( BASE gt_return
+           ( type    = if_xo_const_message=>error
+             message = |Line { lv_line }: | &&
+                       |Site { ls_xl_data-site_id } is invalid | ) ).
+      ENDIF.
+    ENDIF.
+
+    lt_gr_done = VALUE #(
+            FOR lwa_ekbe IN gt_ekbe
+            WHERE ( ebeln = ls_xl_data-po_number AND
+                    ebelp = ls_xl_data-po_item )
+            ( lwa_ekbe ) ).
+    lv_gr_qty = REDUCE #( INIT lv_exist_qty = 0
+                FOR lwa_gr_done IN lt_gr_done
+                NEXT lv_exist_qty += lwa_gr_done-menge + lwa_gr_done-wesbs ).
+    lv_open_qty = ls_ekpo-menge - lv_gr_qty.
+    IF lv_open_qty < ls_xl_data-gr_quantity.
+      gt_return = VALUE #( BASE gt_return
+             ( type    = if_xo_const_message=>error
+               message = |Line { lv_line }: | &&
+                         |GR Quantity > Open Quantity| ) ).
+    ENDIF.
+    CLEAR: ls_ekpo, lv_gr_qty, lv_open_qty.
+
+  ENDLOOP.
+
+ENDFORM.
+
+FORM create_output.
+
+  DATA: ls_gr_output TYPE gty_gr_output,
+        lt_mseg      TYPE STANDARD TABLE OF lty_mseg,
+        lv_l2_wbs    TYPE prps-posid,
+        lv_l3_wbs    TYPE prps-posid,
+        lv_uom       TYPE ekpo-meins.
+  CONSTANTS: gc_status_teco TYPE jcds-stat VALUE 'I0045'.
+  CLEAR: gt_gr_output.
+  LOOP AT gt_xldata INTO DATA(ls_xl_data).
+    CLEAR: ls_gr_output, lv_uom, lv_l2_wbs, lv_l3_wbs.
+
+    ls_gr_output-po_number  = ls_xl_data-po_number.
+    ls_gr_output-po_item    = ls_xl_data-po_item.
+    ls_gr_output-qty        = ls_xl_data-gr_quantity.
+    ls_gr_output-uom        = ls_xl_data-unit_of_measure.
+    ls_gr_output-site       = ls_xl_data-site_id.
+    ls_gr_output-hdr_txt    = ls_xl_data-header_text.
+
+    "Convert Unit of Measure
+    CALL FUNCTION 'CONVERSION_EXIT_CUNIT_INPUT'
+      EXPORTING
+        input          = ls_gr_output-uom
+        language       = sy-langu
+      IMPORTING
+        output         = lv_uom
+      EXCEPTIONS
+        unit_not_found = 1
+        OTHERS         = 2.
+    IF sy-subrc IS INITIAL.
+      ls_gr_output-uom = lv_uom.
+    ENDIF.
+
+    DATA(ls_ekko) = VALUE #( gt_ekko[
+        ebeln = ls_xl_data-po_number ] OPTIONAL ).
+
+    DATA(ls_ekpo) = VALUE #( gt_ekpo[
+        ebeln = ls_xl_data-po_number
+        ebelp = ls_xl_data-po_item ] OPTIONAL ).
+
+    IF ls_ekpo IS NOT INITIAL.
+      ls_gr_output-material   = ls_ekpo-matnr.
+      ls_gr_output-plant      = ls_ekpo-werks.
+      ls_gr_output-st_loc     = ls_ekpo-lgort.
+    ENDIF.
+
+    "Get L2 WBS from EKKN
+    DATA(ls_ekkn) = VALUE #(  gt_ekkn[
+      ebeln = ls_xl_data-po_number
+      ebelp = ls_xl_data-po_item  ] OPTIONAL ).
+    IF ls_ekkn IS NOT INITIAL.
+      lv_l2_wbs = |{ ls_ekkn-ablad(11) }-{ ls_xl_data-site_id }|.
+      lt_mseg = VALUE #( FOR lwa_mseg IN gt_mseg WHERE ( ablad(20) = lv_l2_wbs )
+              ( lwa_mseg ) ).
+      SORT lt_mseg BY ablad.
+      DELETE ADJACENT DUPLICATES FROM lt_mseg COMPARING ablad.
+      LOOP AT lt_mseg INTO DATA(ls_mseg).
+        lv_l2_wbs = ls_mseg-ablad.
+        DATA(ls_prps) = VALUE #( gt_prps[ pspnr = ls_mseg-pspnr ] OPTIONAL ).
+        IF ls_prps IS NOT INITIAL.
+          ls_gr_output-gr_pspnr = ls_prps-pspnr.
+          ls_gr_output-gr_posid = ls_prps-posid.
+          ls_gr_output-gr_objnr = ls_prps-objnr.
+          DATA(ls_jcds) = VALUE #( gt_jcds[
+            objnr = ls_prps-objnr
+            stat = gc_status_teco ] OPTIONAL ).
+          "Teco Not present, use L2 and L3
+          IF ls_jcds IS INITIAL.
+            lv_l3_wbs = lv_l2_wbs.
+            EXIT.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+      IF lv_l3_wbs IS INITIAL.
+        IF lt_mseg IS INITIAL.
+          DATA(site_ext) = |{ ls_xl_data-site_id WIDTH = 8 ALIGN = RIGHT PAD = '0' }|.
+          ls_xl_data-site_id = |{ site_ext }|.
+          lv_l3_wbs = |{ ls_ekkn-ablad(11) }-{ ls_xl_data-site_id }|.
+        ELSE.
+          lv_l3_wbs = lv_l2_wbs.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    ls_gr_output-pr_l3_wbs = lv_l2_wbs.
+    ls_gr_output-gr_l3_wbs = lv_l3_wbs.
+
+    APPEND ls_gr_output TO gt_gr_output.
+  ENDLOOP.
+
+ENDFORM.
+
+FORM call_bapi.
+
+  TYPES: BEGIN OF lty_ekkn,
+           ebeln      TYPE ekkn-ebeln,
+           ebelp      TYPE ekkn-ebelp,
+           ps_psp_pnr TYPE ekkn-ps_psp_pnr,
+           posid      TYPE ps_posid,
+         END OF lty_ekkn.
+
+  DATA: ls_header      TYPE bapi2017_gm_head_01,
+        ls_gm_code     TYPE bapi2017_gm_code,
+        ls_header_ret  TYPE bapi2017_gm_head_ret,
+        lv_has_error   TYPE abap_boolean,
+        lt_gm_item     TYPE gm_items_t,
+        lt_return      TYPE bapirettab,
+        lt_output_4_po TYPE gtt_gr_output,
+        lt_ekkn        TYPE STANDARD TABLE OF lty_ekkn,
+        ls_ekkn        TYPE lty_ekkn,
+        lt_ekkn_keys   TYPE STANDARD TABLE OF lty_ekkn.
+  CONSTANTS:
+    lc_transfer_posting TYPE bapi2017_gm_code VALUE '04'.
+
+  lt_ekkn_keys = VALUE #( FOR lwa_output IN gt_gr_output
+      ( ebeln = lwa_output-po_number
+        ebelp = lwa_output-po_item ) ).
+  IF lt_ekkn_keys IS NOT INITIAL.
+    SELECT ebeln, ebelp, ps_psp_pnr FROM ekkn
+        FOR ALL ENTRIES IN @lt_ekkn_keys
+        WHERE ebeln = @lt_ekkn_keys-ebeln
+          AND ebelp = @lt_ekkn_keys-ebelp
+          INTO TABLE @lt_ekkn.
+    IF sy-subrc IS INITIAL.
+      LOOP AT lt_ekkn ASSIGNING FIELD-SYMBOL(<lfs_ekkn>).
+        CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+          EXPORTING
+            input  = <lfs_ekkn>-ps_psp_pnr
+          IMPORTING
+            output = <lfs_ekkn>-posid.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+
+  ls_header-pstng_date = sy-datum.
+  ls_header-doc_date   = sy-datum.
+  ls_gm_code-gm_code   = lc_transfer_posting.
+  LOOP AT gt_gr_output INTO DATA(ls_gr_ouput)
+         GROUP BY ( po_number = ls_gr_ouput-po_number
+                    gr_l3_wbs = ls_gr_ouput-gr_l3_wbs )
+         ASCENDING REFERENCE INTO DATA(lo_gr_output).
+
+    CLEAR: ls_ekkn, lv_has_error, lt_gm_item.
+    "Get All entries for same PO and WBS
+    CLEAR: lt_output_4_po.
+    lt_output_4_po = VALUE #(
+        FOR lwa_gr_output IN gt_gr_output
+        WHERE ( po_number = lo_gr_output->po_number
+          AND   gr_l3_wbs = lo_gr_output->gr_l3_wbs )
+    ( lwa_gr_output ) ).
+    LOOP AT lt_output_4_po ASSIGNING FIELD-SYMBOL(<lfs_gr_output>).
+      ls_ekkn = VALUE #( lt_ekkn[
+          ebeln = <lfs_gr_output>-po_number
+          ebelp = <lfs_gr_output>-po_item ] OPTIONAL ).
+
+      lt_gm_item = VALUE gm_items_t( BASE lt_gm_item
+        (
+          material = <lfs_gr_output>-material
+          plant = <lfs_gr_output>-plant
+          stge_loc = <lfs_gr_output>-st_loc
+          batch = <lfs_gr_output>-po_number
+          move_type = '313'
+          spec_stock = 'Q'
+          entry_qnt = <lfs_gr_output>-qty
+          entry_uom = <lfs_gr_output>-uom
+          move_mat = <lfs_gr_output>-material
+          move_plant = <lfs_gr_output>-plant
+          move_stloc = 'L001'
+          move_batch = <lfs_gr_output>-po_number
+          wbs_elem = <lfs_gr_output>-gr_l3_wbs
+          val_wbs_elem = ls_ekkn-posid
+        ) ).
+    ENDLOOP.
+
+    "Call BAPI to create Good Movement
+    CALL FUNCTION 'BAPI_GOODSMVT_CREATE'
+      EXPORTING
+        goodsmvt_header  = ls_header
+        goodsmvt_code    = ls_gm_code
+      IMPORTING
+        goodsmvt_headret = ls_header_ret
+      TABLES
+        goodsmvt_item    = lt_gm_item
+        return           = gt_return.
+
+  ENDLOOP.
+
+ENDFORM.

@@ -1,0 +1,97 @@
+CLASS lhc_xldata DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PUBLIC SECTION.
+    DATA: gt_return            TYPE bapirettab,
+          gv_response_received TYPE abap_boolean.
+    METHODS: fill_errors IMPORTING p_task TYPE clike.
+
+  PRIVATE SECTION.
+
+    METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION
+      IMPORTING keys REQUEST requested_authorizations FOR xldata RESULT result.
+
+    METHODS processdata FOR MODIFY
+      IMPORTING keys FOR ACTION xldata~processdata RESULT result.
+
+ENDCLASS.
+
+CLASS lhc_xldata IMPLEMENTATION.
+
+  METHOD get_instance_authorizations.
+  ENDMETHOD.
+
+  METHOD processdata.
+
+    DATA: lt_xldata TYPE zmaks_tt_mat_doc,
+          lt_return TYPE bapirettab.
+
+    READ ENTITIES OF zmaks_i_xl_user IN LOCAL MODE
+    ENTITY xlhead ALL FIELDS WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_xlhead)
+    ENTITY xlhead BY \_xldata
+    ALL FIELDS WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_xldata_file).
+
+    lt_xldata = VALUE #(
+        FOR lwa_data IN lt_xldata_file (
+          po_number         = lwa_data-ponumber
+          po_item           = lwa_data-poitem
+          gr_quantity       = lwa_data-grquantity
+          unit_of_measure   = lwa_data-unitofmeasure
+          site_id           = lwa_data-siteid
+          header_text       = lwa_data-headertext ) ).
+    CHECK lt_xldata IS NOT INITIAL.
+
+    CALL FUNCTION 'ZMAKS_FM_MAT_DOC_BAPI'
+      STARTING NEW TASK 'MDOC' DESTINATION 'NONE'
+      CALLING fill_errors ON END OF TASK
+      EXPORTING
+        it_xldata = lt_xldata.
+    WAIT FOR ASYNCHRONOUS TASKS UNTIL gv_response_received = abap_true.
+
+    lt_return = gt_return.
+    DATA(ls_return) = VALUE #( lt_return[ type = 'E' ] OPTIONAL ).
+    IF ls_return IS INITIAL.
+      ls_return = VALUE #( lt_return[ type = 'A' ] OPTIONAL ).
+    ENDIF.
+    IF ls_return IS INITIAL.
+      mapped-xldata = CORRESPONDING #( lt_xldata_file ).
+      RETURN.
+    ENDIF.
+    DATA(ls_xldata_file) = VALUE #( lt_xldata_file[ 1 ] OPTIONAL ).
+
+    LOOP AT lt_return INTO ls_return WHERE type = 'E' OR type = 'A'.
+      APPEND VALUE #( %tky        = ls_xldata_file-%tky
+                      %state_area = 'SA_ERROR'
+                     ) TO reported-xldata.
+      APPEND VALUE #( %tky = ls_xldata_file-%tky  ) TO failed-xldata.
+      APPEND VALUE #(
+          %tky     = ls_xldata_file-%tky
+          %element-ponumber = if_abap_behv=>mk-on
+          %state_area = 'SA_ERROR'
+          %msg     = new_message_with_text(
+                       severity = SWITCH #( ls_return-type
+                                      WHEN 'E' OR 'A' THEN if_abap_behv_message=>severity-error
+                                      WHEN 'S' THEN if_abap_behv_message=>severity-success
+                                      WHEN 'W' THEN if_abap_behv_message=>severity-warning
+                                      WHEN 'I' THEN if_abap_behv_message=>severity-information )
+                       text     = ls_return-message )
+      ) TO reported-xldata.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD fill_errors.
+    DATA: lt_return TYPE bapirettab.
+
+   IF p_task = 'MDOC'.
+      RECEIVE RESULTS FROM FUNCTION 'ZMAKS_FM_MAT_DOC_BAPI'
+          IMPORTING et_return = lt_return.
+      IF sy-subrc IS INITIAL.
+        gt_return = lt_return.
+        gv_response_received = abap_true.
+      ENDIF.
+    ENDIF.
+
+  ENDMETHOD.
+
+ENDCLASS.

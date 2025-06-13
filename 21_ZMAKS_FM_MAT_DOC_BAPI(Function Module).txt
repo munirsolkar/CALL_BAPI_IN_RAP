@@ -1,0 +1,25 @@
+FUNCTION zmaks_fm_mat_doc_bapi
+	IMPORTING 
+		VALUE(it_xldata) type zmaks_tt_mat_doc
+	exporting 
+	  value(et_return) type bapirettab.
+
+"Validate Data
+gl_xldata = it_xldata.
+PERFORM validate_data.
+IF gt_return IS NOT INITIAL.
+  et_return = gt_return.
+  RETURN.
+ENDIF.
+
+"Create Output
+PERFORM create_output.
+IF gt_return IS NOT INITIAL.
+  et_return = gt_return.
+  RETURN.
+ENDIF.
+
+PERFORM call_bapi.
+et_return = gt_return.
+
+ENDFUNCTION.

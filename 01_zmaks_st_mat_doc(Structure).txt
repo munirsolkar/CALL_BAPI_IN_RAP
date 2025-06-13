@@ -1,0 +1,15 @@
+@EndUserText.label : 'XL Data - Structure'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+define structure zmaks_st_mat_doc {
+
+  po_number       : ebeln;
+  po_item         : ebelp;
+  @Semantics.quantity.unitOfMeasure : 'mseg.meins'
+  gr_quantity     : menge_d;
+  unit_of_measure : meins;
+  @EndUserText.label : 'Site ID'
+  site_id         : abap.char(30);
+  @EndUserText.label : 'Header Text'
+  header_text     : abap.char(30);
+
+}
