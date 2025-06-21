@@ -1,0 +1,97 @@
+FUNCTION-POOL zmaks_fg_xl_upload.           "MESSAGE-ID ..
+
+TYPES: BEGIN OF gty_gr_output,
+         po_number TYPE ebeln,
+         po_item   TYPE ebelp,
+         qty       TYPE menge_d,
+         uom       TYPE meins,
+         site      TYPE char8,
+         hdr_txt   TYPE char30,
+         material  TYPE matnr,
+         plant     TYPE werks_d,
+         st_loc    TYPE lgort_d,
+         pr_l3_wbs TYPE mseg-ablad,
+         gr_l3_wbs TYPE mseg-ablad,
+         gr_pspnr  TYPE prps-pspnr,
+         gr_posid  TYPE prps-posid,
+         gr_objnr  TYPE prps-objnr,
+
+****           sp_st_dt     TYPE dats,
+****           sp_en_dt     TYPE dats,
+****
+****
+****           pr_pspnr     TYPE prps-pspnr,
+****           pr_posid     TYPE prps-posid,
+****           pr_objnr     TYPE prps-objnr,
+
+****           new_wbs      TYPE abap_boolean,
+****           new_wbs_text TYPE char20,
+****           api_status   TYPE char8,
+****           api_message  TYPE message-msgtx,
+****           bsart        TYPE bsart,
+****           no_attach    TYPE i,                             "DS4K903829
+       END OF gty_gr_output.
+TYPES: gtt_gr_output TYPE STANDARD TABLE OF gty_gr_output.
+
+TYPES: BEGIN OF lty_ekko,
+         ebeln TYPE ebeln,
+         bsart TYPE bsart,
+       END OF lty_ekko.
+TYPES: BEGIN OF lty_ekpo,
+         ebeln       TYPE ebeln,
+         ebelp       TYPE ebelp,
+         matnr       TYPE matnr,
+         werks       TYPE werks_d,
+         lgort       TYPE lgort_d,
+         menge       TYPE bstmg,
+         meins       TYPE bstme,
+         bukrs       TYPE bukrs,                            "DS4K901764
+         knttp       TYPE knttp,
+         producttype TYPE product_type,
+       END OF lty_ekpo.
+TYPES: BEGIN OF lty_ekbe,
+         ebeln TYPE ebeln,
+         ebelp TYPE ebelp,
+         vgabe TYPE vgabe,
+         gjahr TYPE mjahr,
+         belnr TYPE mblnr,
+         buzei TYPE mblpo,
+         bwart TYPE bwart,
+         menge TYPE menge_d,
+         wesbs TYPE wesbs,
+         shkzg TYPE shkzg,
+       END OF lty_ekbe.
+TYPES: BEGIN OF lty_ekkn,
+         ebeln      TYPE ebeln,
+         ebelp      TYPE ebelp,
+         ps_psp_pnr TYPE ekkn-ps_psp_pnr,
+         ablad      TYPE mseg-ablad,
+       END OF lty_ekkn.
+TYPES: BEGIN OF lty_mseg,
+         mblnr TYPE mseg-mblnr,
+         mjahr TYPE mseg-mjahr,
+         zeile TYPE mseg-zeile,
+         ebeln TYPE mseg-ebeln,
+         ebelp TYPE mseg-ebelp,
+         ablad TYPE mseg-ablad,
+         pspnr TYPE prps-pspnr,
+       END OF lty_mseg.
+TYPES: BEGIN OF lty_prps,
+         pspnr TYPE prps-pspnr,
+         posid TYPE prps-posid,
+         objnr TYPE prps-objnr,
+       END OF lty_prps.
+TYPES: BEGIN OF lty_jcds,
+         objnr TYPE jcds-objnr,
+         stat  TYPE jcds-stat,
+       END OF lty_jcds.
+DATA: gt_ekko      TYPE STANDARD TABLE OF lty_ekko,
+      gt_ekpo      TYPE STANDARD TABLE OF lty_ekpo,
+      gt_ekbe      TYPE STANDARD TABLE OF lty_ekbe,
+      gt_ekkn      TYPE STANDARD TABLE OF lty_ekkn,
+      gt_mseg      TYPE STANDARD TABLE OF lty_mseg,
+      gt_prps      TYPE STANDARD TABLE OF lty_prps,
+      gt_jcds      TYPE STANDARD TABLE OF lty_jcds,
+      gt_xldata    TYPE zmaks_tt_mat_doc,
+      gt_gr_output TYPE gtt_gr_output,
+      gt_return    TYPE bapirettab.
